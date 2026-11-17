@@ -1,0 +1,29 @@
+# Schwellenwerte und Einstellungen. Jeder Lauf speichert eine Kopie dieser Datei in runs/<run_id>/config.toml.
+
+[gate]
+min_observations = 24        # gültige Beobachtungen
+min_seasonal_cycles = 2.0    # volle Saisonzyklen in der Historie
+max_missing_share = 0.10     # Anteil fehlender Perioden/Werte
+max_duplicate_dates = 0
+max_off_grid_dates = 0       # Datumswerte, die nicht auf dem erkannten Raster liegen
+
+[patterns]
+anomaly_z_threshold = 3.5    # robuster z-Wert (MAD) auf STL-Residuen
+stable_trend_threshold = 0.001  # |Steigung pro Periode| / mittleres Niveau, darunter gilt der Trend als stabil
+
+[backtest]
+folds = 3
+models = ["saisonal_naiv", "ets", "sarima", "theta"]
+min_train_cycles = 2.0       # Mindestlänge des Trainingsfensters in Saisonzyklen
+
+[run]
+max_iterations = 3
+default_horizon = 12
+date_column = "datum"
+value_column = "wert"
+
+[llm]
+model = "sonnet"
+max_budget_usd = 0.30
+timeout_s = 240
+retries = 1
