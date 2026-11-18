@@ -36,6 +36,13 @@ RETRY_TEMPLATE = (
     "\n\nDeine letzte Antwort wurde abgelehnt: {problem}. "
     "Antworte erneut und verwende ausschließlich Zahlen aus den Eingaben."
 )
+HOST_ANSWER_FORMAT = """## Antwortformat
+
+Schreibe genau dieses JSON in eine UTF-8-Datei:
+
+```json
+{"summary": "<Text>", "notes": ["<Punkt>"]}
+```"""
 TEMPLATE_SUMMARY = (
     "{title}: automatisch erstellt ohne LLM-Interpretation. Die Kennzahlen stehen in den Tabellen."
 )
@@ -89,6 +96,41 @@ def _check(structured: dict[str, Any] | None, allowed: set[float]) -> tuple[Inte
     if unsupported:
         return None, _unsupported_message(unsupported)
     return interpretation, ""
+
+
+class InterpretationPending(Exception):
+    """The chat host must write this step's text; the run pauses until it is submitted."""
+
+    def __init__(self, request: str) -> None:
+        super().__init__("Interpretation ausstehend")
+        self.request = request
+
+
+def build_host_request(step: StepDefinition, documents: Mapping[str, str]) -> str:
+    return "\n\n".join(
+        [
+            f"# Auftrag für Schritt {step.step_id}: {step.title}",
+            step.instructions.strip() + OUTPUT_RULES,
+            HOST_ANSWER_FORMAT,
+            build_prompt(documents),
+        ]
+    )
+
+
+@dataclass(frozen=True)
+class HostInterpreter:
+    """The chat agent hosting the run writes the text; `accept_answer` checks it on submission."""
+
+    def interpret(self, step: StepDefinition, documents: Mapping[str, str]) -> InterpretationOutcome:
+        raise InterpretationPending(build_host_request(step, documents))
+
+
+def accept_answer(step_id: str, answer: Any, documents: Mapping[str, str]) -> Interpretation:
+    """Apply the same format and number checks to a submitted answer as to a subagent's answer."""
+    interpretation, problem = _check(answer, allowed_values(documents.values()))
+    if interpretation is None:
+        raise StepRejected(f"{step_id}: {problem}")
+    return interpretation
 
 
 @dataclass(frozen=True)

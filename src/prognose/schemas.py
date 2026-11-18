@@ -166,8 +166,26 @@ class StepRecord(Frozen):
     cost_usd: float
 
 
+class DataMapping(Frozen):
+    """How one series is read from a raw export; reused when new data is handed over."""
+
+    date_column: str
+    value_column: str
+    sheet: str | None = None
+    filters: dict[str, str] = Field(default_factory=dict)
+    aggregate: Literal["keine", "summe", "mittelwert"] = "keine"
+    decimal: Literal["komma", "punkt"] | None = None
+    date_order: Literal["tag_zuerst", "monat_zuerst"] | None = None
+
+
 RunStatus = Literal[
-    "running", "waiting_for_data", "awaiting_review", "completed", "stopped_max_loops", "failed"
+    "running",
+    "awaiting_interpretation",
+    "waiting_for_data",
+    "awaiting_review",
+    "completed",
+    "stopped_max_loops",
+    "failed",
 ]
 
 
@@ -182,3 +200,6 @@ class RunState(Frozen):
     history: list[StepRecord]
     cost_usd: float
     error: str | None
+    host: Literal["claude", "copilot"] = "claude"
+    pending_step: str | None = None
+    data_mapping: DataMapping | None = None

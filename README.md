@@ -3,17 +3,45 @@
 Erkennt Trends, saisonale Schwankungen und Auffälligkeiten in einer Zeitreihe und erstellt daraus
 überprüfbare Prognosen, die ein Mensch freigibt, bevor sie als Excel und PowerPoint exportiert werden.
 
-Jeder Kasten des Ablaufdiagramms ist ein eigener Schritt mit eigener Anweisungsdatei in `steps/`.
+Jeder Kasten des Ablaufdiagramms ist ein eigener Schritt mit eigener Anweisungsdatei in
+`src/prognose/resources/steps/`.
 Ein Orchestrator führt die Schritte der Reihe nach aus, übergibt die Ergebnisse als Dateien und setzt
 die beiden Schleifen ("Nein" → Daten nachfordern, "Anpassen" → neu übergeben) um.
+
+## In GitHub Copilot verwenden
+
+Voraussetzungen: VS Code mit GitHub Copilot, Python ab 3.12, Git und Zugriff auf PyPI.
+
+Installation in PowerShell (eine Zeile):
+
+```powershell
+py -m venv "$HOME\.prognose\venv"; & "$HOME\.prognose\venv\Scripts\python" -m pip install "git+https://github.com/Amir-stu/muster-prognose-agent.git@copilot-v1"; & "$HOME\.prognose\venv\Scripts\python" -m prognose install-copilot
+```
+
+Danach VS Code neu laden, im Copilot-Chat den Agenten **Prognose** wählen und den Pfad zur Datei nennen:
+
+```text
+Erstelle eine Prognose aus daten/absatz.xlsx
+```
+
+Der Agent liest die Struktur der Datei, stellt seine Rückfragen (Spalten, Reihe, Zahlenformat, Horizont), führt
+den Lauf aus und legt das Ergebnis zur Prüfung vor. Excel und PowerPoint entstehen erst nach Ihrer Freigabe.
+
+**Datenschutz:** Die Berechnung läuft lokal. An das Sprachmodell von Copilot gehen die Spaltennamen, Kategorien
+und die berechneten Kennzahlen der Schritte, darunter Prognosewerte und Auffälligkeiten. Nennen Sie deshalb den
+Dateipfad, statt die Datei an den Chat anzuhängen: Eine angehängte Datei geht vollständig an das Modell. Klären
+Sie vor dem Einsatz mit echten Firmendaten, ob Ihre Organisation das erlaubt. Läufe liegen im Ordner
+`prognose-runs/` des Workspace, den Git automatisch ignoriert.
 
 ## Grundregel: kein LLM erzeugt eine Zahl
 
 Jeder Analyseschritt hat zwei Teile:
 
 1. **Werkzeug** (`src/prognose/tools/`): deterministisches Python, berechnet alle Zahlen.
-2. **Subagent**: die Anweisungsdatei `steps/NN_*.md` wird als System-Prompt eines `claude -p`-Laufs
-   verwendet. Der Subagent liest die JSON-Ausgaben und schreibt nur Text (`summary`, `notes`).
+2. **Textschritt**: die Anweisungsdatei `src/prognose/resources/steps/NN_*.md` geht an Copilot
+   (`--host copilot`) oder an einen `claude -p`-Lauf (Standard). Das Modell schreibt nur Text
+   (`summary`, `notes`). Im Copilot-Modus pausiert der Lauf an jedem Textschritt, bis `prognose interpret`
+   einen Text annimmt.
 
 Jede Zahl im Text des Subagenten muss sich auf eine Zahl in seinen Eingaben zurückführen lassen
 (Rundung bzw. 1 % Toleranz, Anteile auch als Prozent). Sonst wird die Antwort einmal mit Rückmeldung
@@ -45,6 +73,9 @@ Modellwahl nach niedrigstem mittleren MASE, bei Gleichstand bleibt die saisonal-
 pip install -e ".[dev]"
 prognose synth --out data/synthetic/synthetische_reihe.csv
 prognose run --data data/synthetic/synthetische_reihe.csv --horizon 12
+prognose inspect export.xlsx      # Struktur einer Rohdatei, ohne Messwerte
+prognose run --data export.xlsx --date-column Monat --value-column Menge --filter "Werk=A" --host copilot
+prognose interpret <run_id> --file antwort.json   # Text für den wartenden Schritt einreichen
 prognose review <run_id> --approve
 prognose review <run_id> --adjust "nur 6 Monate" --horizon 6
 prognose handover <run_id> --data neue_daten.csv
@@ -52,9 +83,11 @@ prognose resume <run_id>      # fehlgeschlagenen Lauf an der Fehlerstelle fortse
 prognose status <run_id>
 ```
 
-`--no-llm` ersetzt die Subagenten durch Vorlagentext (kostenlos, für Tests). Daten: CSV oder Excel mit
-den Spalten `datum` und `wert` (änderbar in `config.toml`, `[run]`). Alle Schwellenwerte stehen in
-`config.toml`; jeder Lauf speichert eine Kopie davon.
+`--no-llm` ersetzt die Textschritte durch Vorlagentext (kostenlos, für Tests). Daten: CSV oder Excel. Ohne
+Spaltenangabe werden die Spalten `datum` und `wert` erwartet. Mit `--date-column` und `--value-column` liest
+der Lauf auch deutsche Exporte (Semikolon, Dezimalkomma, `31.01.2024`). Mehrdeutige Formate wie `1.234` oder
+`01/02/2024` werden nicht geraten: Der Lauf stoppt und verlangt `--decimal` bzw. `--date-order`. Alle
+Schwellenwerte stehen in `src/prognose/resources/config.toml`; jeder Lauf speichert eine Kopie davon.
 
 Ein Lauf liegt in `runs/<run_id>/`: `state.json` (wird nach jedem Schritt geschrieben, ein abgebrochener
 Lauf läuft beim nächsten Aufruf an derselben Stelle weiter), `input/` (Kopien der Daten) und je
@@ -75,5 +108,8 @@ Anpassen-Schleife, Schleifenlimit, Wiederaufnahme und Abbruch bei Zahlen ohne Be
 
 - Nur eine Reihe pro Lauf; keine Mehrfachreihen (Produkte, Regionen).
 - Bisher nur mit synthetischen Daten geprüft.
+- Keine Umrechnung der Frequenz, etwa von Tages- auf Monatswerte.
+- Die Freigabe durch den Menschen ist im Copilot-Modus eine Anweisung an den Agenten. Das Programm exportiert
+  nie ohne `review --approve`, kann aber nicht prüfen, wer diesen Befehl ausgelöst hat.
 - Keine erklärenden Variablen (Preise, Aktionen, Feiertage) und keine Strukturbruch-Erkennung.
 - Jährliche Daten werden nicht unterstützt (keine Saisonalität bestimmbar).

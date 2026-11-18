@@ -138,12 +138,14 @@ def visualize_tool(ctx: StepContext, _interpretation: Interpretation | None) -> 
     patterns = read_model(ctx.iter_dir / "04_patterns.json", PatternResult)
     forecast = read_model(ctx.iter_dir / "06_forecast.json", ForecastResult)
     chart = ctx.iter_dir / "07_chart.png"
+    mapping = ctx.state.data_mapping
+    label = mapping.value_column if mapping else ctx.config.run.value_column
     render_chart(
         series,
         forecast,
         patterns.anomalies,
         chart,
-        f"{ctx.config.run.value_column}: Historie und Prognose ({forecast.model})",
+        f"{label}: Historie und Prognose ({forecast.model})",
     )
     write_model(
         ctx.iter_dir / "07_visualize.json",

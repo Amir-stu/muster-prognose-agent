@@ -2,25 +2,24 @@ from pathlib import Path
 
 import pytest
 
+from prognose import DEFAULT_CONFIG_PATH, STEPS_DIR
 from prognose.config import load_config
 from prognose.synthetic import SyntheticSpec, make_series
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
 def config():
-    return load_config(PROJECT_ROOT / "config.toml")
+    return load_config(DEFAULT_CONFIG_PATH)
 
 
 @pytest.fixture
-def config_path():
-    return PROJECT_ROOT / "config.toml"
+def config_path() -> Path:
+    return DEFAULT_CONFIG_PATH
 
 
 @pytest.fixture
-def steps_dir():
-    return PROJECT_ROOT / "steps"
+def steps_dir() -> Path:
+    return STEPS_DIR
 
 
 @pytest.fixture
